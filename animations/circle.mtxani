@@ -1,0 +1,132 @@
+animation
+loop true
+repeats 4
+keep_last false
+
+frame
+dur 50
+rst true
+2 0 white
+3 0 white
+4 0 white
+5 1 white
+
+frame
+dur 50
+rst true
+3 0 white
+4 0 white
+5 1 white
+6 2 white
+
+frame
+dur 50
+rst true
+4 0 white
+5 1 white
+6 2 white
+6 3 white
+
+frame
+dur 50
+rst true
+5 1 white
+6 2 white
+6 3 white
+6 4 white
+
+frame
+dur 50
+rst true
+6 2 white
+6 3 white
+6 4 white
+5 5 white
+
+frame
+dur 50
+rst true
+6 3 white
+6 4 white
+5 5 white
+4 6 white
+
+frame
+dur 50
+rst true
+6 4 white
+5 5 white
+4 6 white
+3 6 white
+
+frame
+dur 50
+rst true
+5 5 white
+4 6 white
+3 6 white
+2 6 white
+
+frame
+dur 50
+rst true
+4 6 white
+3 6 white
+2 6 white
+1 5 white
+
+frame
+dur 50
+rst true
+3 6 white
+2 6 white
+1 5 white
+0 4 white
+
+frame
+dur 50
+rst true
+2 6 white
+1 5 white
+0 4 white
+0 3 white
+
+frame
+dur 50
+rst true
+1 5 white
+0 4 white
+0 3 white
+0 2 white
+
+frame
+dur 50
+rst true
+0 4 white
+0 3 white
+0 2 white
+1 1 white
+
+frame
+dur 50
+rst true
+0 3 white
+0 2 white
+1 1 white
+2 0 white
+
+frame
+dur 50
+rst true
+0 2 white
+1 1 white
+2 0 white
+3 0 white
+
+frame
+dur 50
+rst true
+1 1 white
+2 0 white
+3 0 white
+4 0 white
