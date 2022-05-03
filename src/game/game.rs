@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use c4_display::{
-    Animation, AnimationFrame, BlinkInfo, DisplayInterface, LedColor, LedState, PinConfig, Running,
-    SyncType,
+    spin_wait, Animation, AnimationFrame, BlinkInfo, DisplayInterface, LedColor, LedState,
+    PinConfig, Rotation, Running, SyncType,
 };
 
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
             ActivePlayer, AiState, ButtonState, Check4, DisplayState, Player, Players, TileType,
         },
         error::{Error, GameResult},
-        input::Input,
+        input::{InputHandler, InputValue},
     },
 };
 
@@ -24,7 +24,7 @@ pub struct Game<'g, const W: usize, const H: usize> {
     ai: Ai<W, H>,
     players: Players,
     display: Option<DisplayInterface<'g, Running, W, H>>,
-    buttons: Option<ButtonsAsync>,
+    input_handler: InputHandler,
     ai_state: AiState,
     button_state: ButtonState,
     display_state: DisplayState,
@@ -57,8 +57,8 @@ impl<'g, const W: usize, const H: usize> Game<'g, W, H> {
                 },
             ),
             display: None,
-            buttons: None,
             ai_state: AiState::Disabled,
+            input_handler: InputHandler::new(),
             button_state: ButtonState::Disabled,
             display_state: DisplayState::Disabled,
         })
@@ -95,15 +95,21 @@ impl<'g, const W: usize, const H: usize> Game<'g, W, H> {
 
     /// Enable push buttons on the matrix board
     pub fn enable_buttons(&mut self) -> GameResult<()> {
-        self.buttons = Some(ButtonsAsync::new(2, 4, 3, 15, 14)?);
-        self.button_state = ButtonState::Enabled;
+        if self.button_state == ButtonState::Disabled {
+            self.input_handler.start_buttons(2, 4, 3, 15, 14)?;
+            // self.buttons = Some(ButtonsAsync::new(2, 4, 3, 15, 14)?);
+            self.button_state = ButtonState::Enabled;
+        }
         Ok(())
     }
 
     /// Disable push buttons on the matrix board
     pub fn disable_buttons(&mut self) {
-        self.buttons.take();
-        self.button_state = ButtonState::Disabled;
+        if self.button_state == ButtonState::Enabled {
+            self.input_handler.stop_buttons();
+            // self.buttons.take();
+            self.button_state = ButtonState::Disabled;
+        }
     }
 
     /// Enable the ai opponent.
@@ -133,20 +139,17 @@ impl<'g, const W: usize, const H: usize> Game<'g, W, H> {
                 }
             }
 
-            // if let Some(win_pos) = win_pos {
-            //     for (y, x) in win_pos {
-            //         temp[y][x].blink = Some(BlinkInfo {
-            //             dur: std::time::Duration::from_millis(250),
-            //             int: std::time::Duration::from_millis(500),
-            //         });
-            //     }
-            // }
-
             self.display
                 .as_mut()
                 .unwrap()
                 .sync(SyncType::All(temp))
                 .unwrap();
+
+            // self.display
+            //     .as_mut()
+            //     .unwrap()
+            //     .sync(SyncType::Rotate(Rotation::Clockwise))
+            //     .unwrap();
         }
     }
 
@@ -164,65 +167,60 @@ impl<'g, const W: usize, const H: usize> Game<'g, W, H> {
             println!("{}'s turn.", self.players.active().name);
 
             match self.players.active {
-                ActivePlayer::Player1 | ActivePlayer::Player2 => match self.button_state {
-                    ButtonState::Enabled => loop {
-                        if self.buttons.as_mut().unwrap().left.read() {
-                            self.board.selected_left();
-                            self.update_disp();
-                        }
-
-                        if self.buttons.as_mut().unwrap().right.read() {
-                            self.board.selected_right();
-                            self.update_disp();
-                        }
-
-                        if self.buttons.as_mut().unwrap().center.read() {
-                            match self.board.place_selected() {
+                ActivePlayer::Player1 | ActivePlayer::Player2 => loop {
+                    match self.input_handler.get() {
+                        Ok(val) => match val {
+                            InputValue::BtnLeft => {
+                                self.board.selected_left();
+                                self.update_disp();
+                            }
+                            InputValue::BtnRight => {
+                                self.board.selected_right();
+                                self.update_disp();
+                            }
+                            InputValue::BtnCenter => match self.board.place_selected() {
                                 Ok(()) => {
+                                    self.drop_ani(self.board.selected());
                                     break;
                                 }
-                                Err(Error::ColumnFull) => {}
-                                Err(Error::InvalidColumn) => {}
-                                Err(Error::InvalidType) => {}
-                                _ => (),
-                            };
-                        }
-
-                        if self.buttons.as_mut().unwrap().up.read() {
-                            break 'main;
-                        }
-
-                        c4_display::spin_wait(Duration::from_millis(20));
-                    },
-                    ButtonState::Disabled => loop {
-                        let input = Input::get();
-                        match input {
-                            Ok(Input::Col(col)) => match self
-                                .board
-                                .place(col, self.players.active().tile)
-                            {
-                                Ok(()) => break,
-                                Err(Error::ColumnFull) => println!("Column {col} is already full!"),
-                                Err(Error::InvalidColumn) => {
-                                    println!("Column {col} does not exist!")
-                                }
-                                Err(Error::InvalidType) => {
-                                    println!(
-                                        "Cant place tile of type {:?}",
-                                        self.players.active().tile
-                                    )
-                                }
-                                _ => unimplemented!(),
+                                Err(_) => (),
                             },
-                            Ok(Input::Quit) => break 'main,
-                            Ok(Input::Help) => {
+                            InputValue::Col(col) => {
+                                match self.board.place(col, self.players.active().tile) {
+                                    Ok(()) => {
+                                        self.drop_ani(col - 1);
+                                        break;
+                                    }
+                                    Err(Error::ColumnFull) => {
+                                        println!("Column {col} is already full!")
+                                    }
+                                    Err(Error::InvalidColumn) => {
+                                        println!("Column {col} does not exist!")
+                                    }
+                                    Err(Error::InvalidType) => {
+                                        println!(
+                                            "Cant place tile of type {:?}",
+                                            self.players.active().tile
+                                        )
+                                    }
+                                    _ => unimplemented!(),
+                                }
+                            }
+                            InputValue::Help => {
                                 print!("Place a piece in a column by typing a number between 1 and {W}");
                                 println!(" (the column numbers are visible above the columns)");
                                 println!("Type quit to stop the round");
                             }
-                            i => println!("Invalid input. Must be a number between 1 and {W}\nprovided input: {i:?}"),
-                        }
-                    },
+                            InputValue::Quit => break 'main,
+                            _ => (),
+                        },
+                        Err(err) => match err {
+                            Error::InvalidInput(str) => println!(
+                                "Invalid input: {str}\nInput must be a number between 1 and {W}"
+                            ),
+                            _ => panic!("expected Error::InvalidInput, found {err}"),
+                        },
+                    }
                 },
                 ActivePlayer::Ai => {
                     print!("{}", self.board);
@@ -230,6 +228,7 @@ impl<'g, const W: usize, const H: usize> Game<'g, W, H> {
                     self.board
                         .place(ai_move, TileType::Player2)
                         .expect("Ai move invalid");
+                    self.drop_ani(ai_move - 1);
                     println!("AI placed in column {ai_move}");
                 }
             }
@@ -299,7 +298,14 @@ impl<'g, const W: usize, const H: usize> Game<'g, W, H> {
         self.board.reset();
 
         if self.display_state == DisplayState::Enabled {
-            c4_display::spin_wait(Duration::from_secs(5));
+            loop {
+                match self.input_handler.get() {
+                    Ok(InputValue::Enter) | Ok(InputValue::BtnCenter) | Ok(InputValue::Quit) => {
+                        break
+                    }
+                    _ => (),
+                }
+            }
 
             self.display.as_mut().unwrap().clear_animations();
             self.update_disp();
@@ -309,6 +315,33 @@ impl<'g, const W: usize, const H: usize> Game<'g, W, H> {
                 .unwrap()
                 .add_animation(Animation::from_file("./animations/circle.mtxani").unwrap())
                 .unwrap();
+        }
+    }
+
+    /// x is 0 indexed
+    fn drop_ani(&mut self, x: usize) {
+        const FRAMEDUR: Duration = Duration::from_millis(100);
+
+        let y_end = match self.board.first_empty(x) {
+            Ok(y) => y,
+            Err(_) => return,
+        };
+        let mut frames = Vec::new();
+
+        // start at 1 to avoid statusbar
+        for y in 1..y_end + 1 {
+            let frame = AnimationFrame::new(
+                FRAMEDUR,
+                vec![(x, y, LedState::with_color(self.players.active().color))],
+                true,
+            );
+            frames.push(frame);
+        }
+        let sleep_time = FRAMEDUR * frames.len() as u32;
+        let ani = Animation::new(false, frames, 0, false);
+        if let Some(disp) = &mut self.display {
+            disp.add_animation(ani).unwrap();
+            std::thread::sleep(sleep_time);
         }
     }
 
@@ -324,11 +357,12 @@ impl<'g, const W: usize, const H: usize> Game<'g, W, H> {
 
         loop {
             println!("Start new round? [Y/n]\t(type \"help\" for help page)");
-            let input = Input::get();
-            match input {
-                Ok(Input::Enter) | Ok(Input::Yes) => self.start_round(),
-                Ok(Input::No) | Ok(Input::Quit) => break,
-                Ok(Input::ToggleAi) => {
+            match self.input_handler.get() {
+                Ok(InputValue::Enter) | Ok(InputValue::Yes) | Ok(InputValue::BtnCenter) => {
+                    self.start_round()
+                }
+                Ok(InputValue::No) | Ok(InputValue::Quit) => break,
+                Ok(InputValue::ToggleAi) => {
                     match self.ai_state {
                         AiState::Enabled => {
                             self.disable_ai();
@@ -341,7 +375,7 @@ impl<'g, const W: usize, const H: usize> Game<'g, W, H> {
                     };
                     self.players.set_active(ActivePlayer::Player1);
                 }
-                Ok(Input::ToggleButtons) => match self.button_state {
+                Ok(InputValue::ToggleButtons) => match self.button_state {
                     ButtonState::Enabled => {
                         self.disable_buttons();
                         println!("Toggling buttons off");
@@ -351,7 +385,7 @@ impl<'g, const W: usize, const H: usize> Game<'g, W, H> {
                         println!("Toggling buttons on");
                     }
                 },
-                Ok(Input::Help) => {
+                Ok(InputValue::Help) => {
                     //? move all terminal output to a seperate file?
                     println!("Commands");
                     println!("  help\t\t\tshow this page");
@@ -368,6 +402,10 @@ impl<'g, const W: usize, const H: usize> Game<'g, W, H> {
                     println!("  n\t\t\tshort for no");
                     println!("  exit, stop, q, e, s\tshort for quit");
                 }
+                // Ok(InputValue::BtnUp)
+                // | Ok(InputValue::BtnDown)
+                // | Ok(InputValue::BtnLeft)
+                // | Ok(InputValue::BtnRight) => (),
                 _ => println!("Invalid"),
             }
         }

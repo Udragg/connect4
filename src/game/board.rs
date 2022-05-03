@@ -52,6 +52,15 @@ impl<const W: usize, const H: usize> Board<W, H> {
         Err(Error::ColumnFull)
     }
 
+    pub(crate) fn first_empty(&self, col: usize) -> GameResult<usize> {
+        for y in (1..H).rev() {
+            if self.board[y][col] == TileType::Empty {
+                return Ok(y);
+            }
+        }
+        Err(Error::ColumnFull)
+    }
+
     /// Check if any player has 4 connected tiles.
     ///
     /// Returns if a player won or if there is a draw.
@@ -152,6 +161,10 @@ impl<const W: usize, const H: usize> Board<W, H> {
     pub(crate) fn place_selected(&mut self) -> GameResult<()> {
         log::trace!("placing at selected");
         self.place(self.selected + 1, self.active_type)
+    }
+
+    pub(crate) fn selected(&self) -> usize {
+        self.selected
     }
 
     pub(crate) fn set_active(&mut self, active: TileType) {

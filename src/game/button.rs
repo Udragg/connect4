@@ -57,7 +57,7 @@ impl ButtonAsync {
 
         pin.set_async_interrupt(Trigger::FallingEdge, move |_| {
             if !triggered_thread.load(Ordering::SeqCst) {
-                if last_trigger.lock().unwrap().elapsed() > Duration::from_millis(200) {
+                if last_trigger.lock().unwrap().elapsed() > Duration::from_millis(130) {
                     triggered_thread.store(true, Ordering::SeqCst);
                 }
                 let mut last_trigger = last_trigger.lock().unwrap();

@@ -7,5 +7,6 @@ fn main() {
         .init();
     let mut game = Game::<W, H>::new().unwrap();
     game.enable_display();
+    game.enable_buttons().unwrap();
     game.start();
 }

@@ -4,7 +4,7 @@ pub enum Error {
     InvalidColumn,
     InvalidType,
     ColumnFull,
-    InvalidInput,
+    InvalidInput(String),
     InvalidDim,
     NoPlayer,
     NoUndos,
